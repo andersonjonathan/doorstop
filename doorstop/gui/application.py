@@ -599,7 +599,7 @@ class Application(ttk.Frame):
             widget.noUserInput_delete(self.text_children, '1.0', 'end')
             self.text_children_hyperlink.reset()
             if self.item is not None:
-                for uid in self.item.find_child_links():
+                for uid in self.item.find_child_links(skip_parent_check=True):
                     item = self.tree.find_item(uid)
                     text = item.text or item.ref or '???'
                     uid = item.uid

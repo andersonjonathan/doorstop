@@ -360,7 +360,7 @@ def _lines_text(obj, indent=8, width=79, **_):
                 slinks = label + ', '.join(str(l) for l in item.links)
                 yield from _chunks(slinks, width, indent)
             if settings.PUBLISH_CHILD_LINKS:
-                links = item.find_child_links()
+                links = item.find_child_links(skip_parent_check=True)
                 if links:
                     yield ""  # break before links
                     slinks = "Child links: " + ', '.join(str(l) for l in links)
@@ -460,7 +460,7 @@ def _lines_markdown(obj, **kwargs):
 
             # Child links
             if settings.PUBLISH_CHILD_LINKS:
-                items2 = item.find_child_items()
+                items2 = item.find_child_items(skip_parent_check=True)
                 if items2:
                     yield ""  # break before links
                     label = "Child links:"

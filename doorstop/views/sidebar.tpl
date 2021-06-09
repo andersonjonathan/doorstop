@@ -3,6 +3,8 @@
     <div class="row">
       <div class="col-lg-2 hidden-sm hidden-xs">
           <nav id="TOC" class="nav nav-stacked fixed sidebar">
+              <a href="./">Back to start page</a><br/>
+              <a href="javascript:window.history.back()">Back</a>
               {{!toc}}
           </nav>
       </div>

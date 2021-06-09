@@ -354,7 +354,7 @@ def _lines_text(obj, indent=8, width=79, **_):
             if item.links:
                 yield ""  # break before links
                 if settings.PUBLISH_CHILD_LINKS:
-                    label = "Parent links: "
+                    label = "Requirements:" if str(item).startswith('TEST') else "Parent links:"
                 else:
                     label = "Links: "
                 slinks = label + ', '.join(str(l) for l in item.links)
@@ -362,9 +362,16 @@ def _lines_text(obj, indent=8, width=79, **_):
             if settings.PUBLISH_CHILD_LINKS:
                 links = item.find_child_links(skip_parent_check=True)
                 if links:
-                    yield ""  # break before links
-                    slinks = "Child links: " + ', '.join(str(l) for l in links)
-                    yield from _chunks(slinks, width, indent)
+                    child_links = [str(l) for l in links if not str(l).startswith('TEST')]
+                    test_links = [str(l) for l in links if str(l).startswith('TEST')]
+                    if child_links:
+                        yield ""  # break before links
+                        slinks = "Child links: " + ', '.join(child_links)
+                        yield from _chunks(slinks, width, indent)
+                    if test_links:
+                        yield ""  # break before links
+                        slinks = "Tests: " + ', '.join(test_links)
+                        yield from _chunks(slinks, width, indent)
 
             if item.document and item.document.publish:
                 yield ""
@@ -451,7 +458,7 @@ def _lines_markdown(obj, **kwargs):
                 yield ""  # break before links
                 items2 = item.parent_items
                 if settings.PUBLISH_CHILD_LINKS:
-                    label = "Parent links:"
+                    label = "Requirements:" if str(item).startswith('TEST') else "Parent links:"
                 else:
                     label = "Links:"
                 links = _format_md_links(items2, linkify)
@@ -462,11 +469,21 @@ def _lines_markdown(obj, **kwargs):
             if settings.PUBLISH_CHILD_LINKS:
                 items2 = item.find_child_items(skip_parent_check=True)
                 if items2:
-                    yield ""  # break before links
-                    label = "Child links:"
-                    links = _format_md_links(items2, linkify)
-                    label_links = _format_md_label_links(label, links, linkify)
-                    yield label_links
+                    child_links = [l for l in items2 if not str(l).startswith('TEST')]
+                    test_links = [l for l in items2 if str(l).startswith('TEST')]
+                    if child_links:
+                        yield ""  # break before links
+                        label = "Child links:"
+                        links = _format_md_links(child_links, linkify)
+                        label_links = _format_md_label_links(label, links, linkify)
+                        yield label_links
+                    if test_links:
+                        yield ""  # break before links
+                        label = "Tests:"
+                        links = _format_md_links(test_links, linkify)
+                        label_links = _format_md_label_links(label, links, linkify)
+                        yield label_links
+
 
             # Add custom publish attributes
             if item.document and item.document.publish:

@@ -126,6 +126,8 @@ def configure_settings(args):
     if hasattr(args, 'no_levels') and args.no_levels is not None:
         settings.PUBLISH_BODY_LEVELS = False
         settings.PUBLISH_HEADING_LEVELS = args.no_levels != 'all'
+    if hasattr(args, 'jira_url') and args.jira_url is not None:
+        settings.JIRA_URL = args.jira_url.strip()
 
 
 def literal_eval(literal, error=None, default=None):

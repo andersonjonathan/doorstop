@@ -529,6 +529,7 @@ def _publish(subs, shared):
         help="do not include levels on heading and non-heading or non-heading items",
     )
     sub.add_argument('--template', help="template file", default=publisher.HTMLTEMPLATE)
+    sub.add_argument('--jira-url', help="Jira url without / on the end")
 
 
 if __name__ == '__main__':

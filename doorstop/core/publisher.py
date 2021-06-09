@@ -350,6 +350,30 @@ def _lines_text(obj, indent=8, width=79, **_):
                 ref = _format_text_references(item)
                 yield from _chunks(ref, width, indent)
 
+            # Owner
+            if 'owner' in item.data and item.data.get('owner'):
+                yield ""  # break before references
+                yield from _chunks(f"Owner: {str(item.data.get('owner')).strip()}", width, indent)
+
+            # Prio
+            if 'prio' in item.data and item.data.get('prio'):
+                yield ""  # break before references
+                yield from _chunks(f"Priority: {str(item.data.get('prio')).strip()}", width, indent)
+
+            # Implemented
+            if 'implemented' in item.data and item.data.get('implemented'):
+                yield ""  # break before references
+                yield from _chunks(f"Implemented: {str(item.data.get('implemented')).strip()}", width, indent)
+
+            # Jira links
+            if 'jira' in item.data and item.data.get('jira'):
+                yield ""  # break before links
+                jira_items = item.data.get('jira')
+                label = "Jira issues: "
+                links = ', '.join(jira_items)
+                slinks = label + links
+                yield from _chunks(slinks, width, indent)
+
             # Links
             if item.links:
                 yield ""  # break before links
@@ -424,10 +448,19 @@ def _lines_markdown(obj, **kwargs):
 
             uid = item.uid
             if settings.ENABLE_HEADERS:
+                # Implemented
                 if item.header:
                     uid = '{h} <small>{u}</small>'.format(h=item.header, u=item.uid)
                 else:
                     uid = '{u}'.format(u=item.uid)
+                if 'implemented' in item.data and item.data.get('implemented') not in [None, '']:
+                    implemented = str(item.data.get('implemented')).strip() not in [None, False, '', 'false', 'False', "''", '""', '0']
+                    uid = '{uid} <small><span class="label {css_class}" title="{title}">{implemented}</span></small>'.format(
+                        uid=uid,
+                        css_class="label-success" if implemented else 'label-danger',
+                        title="Implemented" if implemented else 'Not implemented',
+                        implemented='✓' if implemented else '✗'
+                    )
 
             # Level and UID
             if settings.PUBLISH_BODY_LEVELS:
@@ -452,6 +485,27 @@ def _lines_markdown(obj, **kwargs):
             if item.references:
                 yield ""  # break before reference
                 yield _format_md_references(item)
+
+            # Owner
+            if 'owner' in item.data and item.data.get('owner'):
+                yield ""  # break before references
+                yield f"Owner: {str(item.data.get('owner')).strip()}"
+            # Prio
+            if 'prio' in item.data and item.data.get('prio'):
+                yield ""  # break before references
+                yield f"Priority: {str(item.data.get('prio')).strip()}"
+
+            # Jira links
+            if 'jira' in item.data and item.data.get('jira'):
+                yield ""  # break before links
+                jira_items = item.data.get('jira')
+                label = "Jira issues:"
+                links = ', '.join(["[{jira_issue}]({base_url}/browse/{jira_issue})".format(
+                    jira_issue=jira_item,
+                    base_url=settings.JIRA_URL
+                ) for jira_item in jira_items])
+                label_links = _format_md_label_links(label, links, linkify)
+                yield label_links
 
             # Parent links
             if item.links:

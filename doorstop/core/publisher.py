@@ -173,26 +173,28 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
     yield '</style>'
     yield '</head>'
     yield '<body>'
-    # Tree structure
-    text = tree.draw() if tree else None
-    if text:
-        yield ''
-        yield '<h3>Tree Structure:</h3>'
-        yield '<pre><code>' + text + '</pre></code>'
+
     # Additional files
     if filenames:
-        if text:
-            yield ''
-            yield '<hr>'
+        documents = tree.documents if tree else None
         yield ''
         yield '<h3>Published Documents:</h3>'
         yield '<p>'
         yield '<ul>'
-        for filename in filenames:
-            name = os.path.splitext(filename)[0]
-            yield '<li> <a href="{f}">{n}</a> </li>'.format(f=filename, n=name)
+        for document in sorted(documents):
+            yield '<li><a href="{p}.html">{n} ({p})</a></li>'.format(p=document.prefix, n=document.name)
         yield '</ul>'
         yield '</p>'
+
+    # Tree structure
+    text = tree.draw() if tree else None
+    if text:
+        if filenames:
+            yield ''
+            yield '<hr>'
+        yield ''
+        yield '<h3>Tree Structure:</h3>'
+        yield '<pre><code>' + text + '</pre></code>'
     # Traceability table
     documents = tree.documents if tree else None
     if documents:

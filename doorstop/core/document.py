@@ -37,6 +37,8 @@ class Document(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
     INDEX = 'index.yml'
 
     DEFAULT_PREFIX = Prefix('REQ')
+    DEFAULT_NAME = 'Requirements'
+    DEFAULT_LEVEL = Level('1.0')
     DEFAULT_SEP = ''
     DEFAULT_DIGITS = 3
 
@@ -62,6 +64,8 @@ class Document(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
         self._attribute_defaults = None
         self._attribute_publish = None
         self._data['prefix'] = Document.DEFAULT_PREFIX
+        self._data['name'] = Document.DEFAULT_NAME
+        self._data['level'] = Item.DEFAULT_LEVEL  # type: ignore
         self._data['sep'] = Document.DEFAULT_SEP
         self._data['digits'] = Document.DEFAULT_DIGITS  # type: ignore
         self._data['parent'] = None  # type: ignore
@@ -89,10 +93,18 @@ class Document(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
         """Even empty documents should be considered truthy."""
         return True
 
+    def __lt__(self, other):
+        if self.level == other.level:
+            if self.name == other.name:
+                return self.prefix < other.prefix
+            return self.name < other.name
+        else:
+            return self.level < other.level
+
     @staticmethod
     @add_document
     def new(
-        tree, path, root, prefix, sep=None, digits=None, parent=None, auto=None
+        tree, path, root, prefix, sep=None, digits=None, parent=None, auto=None, name=None, level=None,
     ):  # pylint: disable=R0913,C0301
         """Create a new document.
 
@@ -106,6 +118,8 @@ class Document(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
         :param digits: number of digits for the new document
         :param parent: parent UID for the new document
         :param auto: automatically save the document
+        :param name: name for the new document
+        :param level: level for the new document
 
         :raises: :class:`~doorstop.common.DoorstopError` if the document
             already exists
@@ -131,6 +145,8 @@ class Document(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
         document.prefix = (  # type: ignore
             prefix if prefix is not None else document.prefix
         )
+        document.name = name if name is not None else document.name
+        document.level = level if level is not None else document.level
         document.sep = sep if sep is not None else document.sep  # type: ignore
         document.digits = (  # type: ignore
             digits if digits is not None else document.digits
@@ -181,6 +197,10 @@ class Document(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
                 if key == 'prefix':
                     self._data[key] = Prefix(value)
                 elif key == 'sep':
+                    self._data[key] = value.strip()
+                elif key == 'level':
+                    self._data[key] = Level(value)
+                elif key == 'name':
                     self._data[key] = value.strip()
                 elif key == 'parent':
                     self._data[key] = value.strip()
@@ -317,6 +337,24 @@ class Document(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
 
     @property  # type: ignore
     @auto_load
+    def name(self):
+        """Get the document's name."""
+        return self._data['name']
+
+    @property  # type: ignore
+    @auto_load
+    def level(self):
+        """Get the item's level."""
+        return self._data['level']
+
+    @level.setter  # type: ignore
+    @auto_save
+    def level(self, value):
+        """Set the item's level."""
+        self._data['level'] = Level(value)  # type: ignore
+
+    @property  # type: ignore
+    @auto_load
     def publish(self):
         """Get the document's prefix."""
         return self._attribute_publish
@@ -328,6 +366,13 @@ class Document(BaseValidatable, BaseFileObject):  # pylint: disable=R0902
         """Set the document's prefix."""
         self._data['prefix'] = Prefix(value)
         # TODO: should the new prefix be applied to all items?
+
+    @name.setter  # type: ignore
+    @auto_save
+    @auto_load
+    def name(self, value):
+        """Set the document's prefix."""
+        self._data['name'] = value
 
     @property  # type: ignore
     @auto_load

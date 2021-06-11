@@ -226,40 +226,6 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
         yield ''
         yield '<h3>Tree Structure:</h3>'
         yield '<pre><code>' + text + '</pre></code>'
-    # Traceability table
-    documents = tree.documents if tree else None
-    if documents:
-        if text or filenames:
-            yield ''
-            yield '<hr>'
-        yield ''
-        # table
-        yield '<h3>Item Traceability:</h3>'
-        yield '<p>'
-        yield '<table>'
-        # header
-        for document in documents:  # pylint: disable=not-an-iterable
-            yield '<col width="100">'
-        yield '<tr>'
-        for document in documents:  # pylint: disable=not-an-iterable
-            link = '<a href="{p}.html">{p}</a>'.format(p=document.prefix)
-            yield ('  <th height="25" align="center"> {link} </th>'.format(link=link))
-        yield '</tr>'
-        # data
-        for index, row in enumerate(tree.get_traceability()):
-            if index % 2:
-                yield '<tr class="alt">'
-            else:
-                yield '<tr>'
-            for item in row:
-                if item is None:
-                    link = ''
-                else:
-                    link = _format_html_item_link(item)
-                yield '  <td height="25" align="center"> {} </td>'.format(link)
-            yield '</tr>'
-        yield '</table>'
-        yield '</p>'
     yield ''
     yield '</body>'
     yield '</html>'

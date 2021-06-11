@@ -185,6 +185,37 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
             yield '<li><a href="{p}.html">{n} ({p})</a></li>'.format(p=document.prefix, n=document.name)
         yield '</ul>'
         yield '</p>'
+        yield ''
+        yield '<hr>'
+        yield ''
+        yield '<h3>Search:</h3>'
+        yield '<input type="text" name="search" id="search-field"/>'
+        yield '<pre id="search-result">'
+        yield '</pre>'
+
+        yield '<script>'
+        yield 'const data = ['
+
+        for document in sorted(documents):
+            for item in document.items:
+                text = item.text.lower().replace('\n', '\\n')
+                yield '{{link: \'<a href="{p}.html#{i}">{n} ({p}) - {i_n}</a>\', text: \'{content}\'}},'.format(
+                    p=document.prefix,
+                    n=document.name,
+                    i=item.uid,
+                    i_n=str(item),
+                    content=f"{item.uid} {str(item.owner_item) if item.owner else ''} {text}")
+        yield '];'
+
+        yield 'const searchField = document.getElementById("search-field");'
+        yield 'const searchResult = document.getElementById("search-result");'
+        yield 'const search = () => {'
+        yield 'const value = searchField.value.toLowerCase().split(" ");'
+        yield 'const res = data.filter(obj => value.every((v) => obj.text.includes(v)));'
+        yield 'searchResult.innerHTML = res.map(obj => obj.link).join("\\n");'
+        yield '};'
+        yield 'searchField.addEventListener("input", search);'
+        yield '</script>'
 
     # Tree structure
     text = tree.draw() if tree else None
@@ -534,8 +565,8 @@ def _lines_markdown(obj, **kwargs):
             if settings.PUBLISH_CHILD_LINKS:
                 items2 = item.find_child_items(skip_parent_check=True)
                 if items2:
-                    child_links = sorted([l for l in items2 if not str(l).startswith('TEST')], key=lambda x: x.uid)
-                    test_links = sorted([l for l in items2 if str(l).startswith('TEST')], key=lambda x: x.uid)
+                    child_links = [l for l in items2 if not str(l).startswith('TEST')]
+                    test_links = [l for l in items2 if str(l).startswith('TEST')]
                     if child_links:
                         yield ""  # break before links
                         label = "Child links:"

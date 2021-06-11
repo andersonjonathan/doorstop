@@ -145,6 +145,7 @@ class Item(BaseFileObject):  # pylint: disable=R0902
         self._data['text'] = Item.DEFAULT_TEXT
         self._data['ref'] = Item.DEFAULT_REF
         self._data['references'] = None  # type: ignore
+        self._data['owner'] = None  # type: ignore
         self._data['links'] = set()  # type: ignore
         if settings.ENABLE_HEADERS:
             self._data['header'] = Item.DEFAULT_HEADER
@@ -235,6 +236,8 @@ class Item(BaseFileObject):  # pylint: disable=R0902
                 value = stripped_value
             elif key == 'links':
                 value = set(UID(part) for part in value)
+            elif key == 'owner':
+                value = UID(value)
             elif key == 'header':
                 value = Text(value)
             self._data[key] = value
@@ -300,6 +303,11 @@ class Item(BaseFileObject):  # pylint: disable=R0902
                 value = stripped_value  # type: ignore
             elif key == 'links':
                 value = [{str(i): i.stamp.yaml} for i in sorted(value)]  # type: ignore
+            elif key == 'owner':
+                if hasattr(value, 'yaml'):
+                    value = value.yaml  # type: ignore
+                else:
+                    value = ''
             elif key == 'reviewed':
                 value = value.yaml  # type: ignore
             else:
@@ -517,6 +525,18 @@ class Item(BaseFileObject):  # pylint: disable=R0902
         """Set the list of item UIDs this item links to."""
         self._data['links'] = set(UID(v) for v in value)  # type: ignore
 
+    @property  # type: ignore
+    @auto_load
+    def owner(self):
+        """Get a item UID for this items owner."""
+        return self._data['owner']
+
+    @owner.setter  # type: ignore
+    @auto_save
+    def owner(self, value):
+        """Set item UID for this items owner."""
+        self._data['owner'] = UID(value)  # type: ignore
+
     @property
     def parent_links(self):
         """Get a list of the item UIDs this item links to."""
@@ -542,6 +562,16 @@ class Item(BaseFileObject):  # pylint: disable=R0902
     def parent_items(self):
         """Get a list of items that this item links to."""
         return [item for uid, item in self._get_parent_uid_and_item()]
+
+    @property
+    def owner_item(self):
+        """Get owner item that this item links to."""
+        try:
+            item = self.tree.find_item(self.owner)  # type: ignore
+        except DoorstopError:
+            item = UnknownItem(self.owner)
+            log.warning(item.exception)
+        return item
 
     @property  # type: ignore
     @requires_tree
@@ -702,6 +732,50 @@ class Item(BaseFileObject):  # pylint: disable=R0902
         return items
 
     child_items = property(find_child_items)
+
+    def find_owned_items(self, find_all=True):
+        """Get a list of items that link to this item.
+
+        :param find_all: find all items (not just the first) before returning
+
+        :return: list of found items
+
+        """
+        child_items: List[Item] = []
+        child_documents: List[Any] = []  # `List[Document]`` creats an import cycle
+        document = self.document
+        tree = self.tree
+        if not document or not tree:
+            return child_items, child_documents
+        # Find child objects
+        log.debug("finding item {}'s owned objects...".format(self))
+        for document2 in tree:
+            child_documents.append(document2)
+            # Search for child items unless we only need to find one
+            if not child_items or find_all:
+                for item2 in document2:
+                    if self.uid == item2.owner:
+                        if not item2.active:
+                            item2 = UnknownItem(item2.uid)
+                            log.warning(item2.exception)
+                            child_items.append(item2)
+                        else:
+                            child_items.append(item2)
+                            if not find_all and item2.active:
+                                break
+        # Display found links
+        if child_items:
+            if find_all:
+                joined = ', '.join(str(i) for i in child_items)
+                msg = "owned items: {}".format(joined)
+            else:
+                msg = "first owned item: {}".format(child_items[0])
+            log.debug(msg)
+            joined = ', '.join(str(d) for d in child_documents)
+            log.debug("child documents: {}".format(joined))
+        return sorted(child_items)
+
+    owned_items = property(find_owned_items)
 
     def find_child_documents(self):
         """Get a list of documents that should link to this item's document.

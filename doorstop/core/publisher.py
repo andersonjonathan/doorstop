@@ -353,9 +353,9 @@ def _lines_text(obj, indent=8, width=79, **_):
                 yield from _chunks(ref, width, indent)
 
             # Owner
-            if 'owner' in item.data and item.data.get('owner'):
+            if item.owner:
                 yield ""  # break before references
-                yield from _chunks(f"Owner: {str(item.data.get('owner')).strip()}", width, indent)
+                yield from _chunks(f"Owner: {str(item.owner_item)}", width, indent)
 
             # Prio
             if 'prio' in item.data and item.data.get('prio'):
@@ -397,6 +397,13 @@ def _lines_text(obj, indent=8, width=79, **_):
                     if test_links:
                         yield ""  # break before links
                         slinks = "Tests: " + ', '.join(test_links)
+                        yield from _chunks(slinks, width, indent)
+                owned_links = item.find_owned_items()
+                if owned_links:
+                    child_links = [str(l) for l in owned_links]
+                    if child_links:
+                        yield ""  # break before links
+                        slinks = "Owned links: " + ', '.join(child_links)
                         yield from _chunks(slinks, width, indent)
 
             if item.document and item.document.publish:
@@ -489,9 +496,11 @@ def _lines_markdown(obj, **kwargs):
                 yield _format_md_references(item)
 
             # Owner
-            if 'owner' in item.data and item.data.get('owner'):
+            if item.owner:
                 yield ""  # break before references
-                yield f"Owner: {str(item.data.get('owner')).strip()}"
+                links = _format_md_links([item.owner_item], linkify)
+                yield _format_md_label_links("Owner:", links, linkify)
+
             # Prio
             if 'prio' in item.data and item.data.get('prio'):
                 yield ""  # break before references
@@ -525,8 +534,8 @@ def _lines_markdown(obj, **kwargs):
             if settings.PUBLISH_CHILD_LINKS:
                 items2 = item.find_child_items(skip_parent_check=True)
                 if items2:
-                    child_links = [l for l in items2 if not str(l).startswith('TEST')]
-                    test_links = [l for l in items2 if str(l).startswith('TEST')]
+                    child_links = sorted([l for l in items2 if not str(l).startswith('TEST')], key=lambda x: x.uid)
+                    test_links = sorted([l for l in items2 if str(l).startswith('TEST')], key=lambda x: x.uid)
                     if child_links:
                         yield ""  # break before links
                         label = "Child links:"
@@ -537,6 +546,16 @@ def _lines_markdown(obj, **kwargs):
                         yield ""  # break before links
                         label = "Tests:"
                         links = _format_md_links(test_links, linkify)
+                        label_links = _format_md_label_links(label, links, linkify)
+                        yield label_links
+
+                owned_links = item.find_owned_items()
+                if owned_links:
+                    child_links = sorted(owned_links, key=lambda x: x.uid)
+                    if child_links:
+                        yield ""  # break before links
+                        label = "Owned links:"
+                        links = _format_md_links(child_links, linkify)
                         label_links = _format_md_label_links(label, links, linkify)
                         yield label_links
 
@@ -658,7 +677,7 @@ def _format_md_item_link(item, linkify=True):
     """Format an item link in Markdown."""
     if linkify and is_item(item):
         if item.header:
-            return "[{u} {h}]({p}.html#{u})".format(
+            return "[{h}]({p}.html#{u})".format(
                 u=item.uid, h=item.header, p=item.document.prefix
             )
         return "[{u}]({p}.html#{u})".format(u=item.uid, p=item.document.prefix)

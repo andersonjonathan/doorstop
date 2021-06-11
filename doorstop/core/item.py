@@ -304,10 +304,9 @@ class Item(BaseFileObject):  # pylint: disable=R0902
             elif key == 'links':
                 value = [{str(i): i.stamp.yaml} for i in sorted(value)]  # type: ignore
             elif key == 'owner':
-                if hasattr(value, 'yaml'):
-                    value = value.yaml  # type: ignore
-                else:
-                    value = ''
+                if value is None:
+                    continue
+                value = str(value)
             elif key == 'reviewed':
                 value = value.yaml  # type: ignore
             else:

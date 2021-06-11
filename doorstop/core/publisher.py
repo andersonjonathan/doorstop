@@ -524,7 +524,7 @@ def _lines_markdown(obj, **kwargs):
             # Parent links
             if item.links:
                 yield ""  # break before links
-                items2 = item.parent_items
+                items2 = sorted(item.parent_items, key=lambda x: x.uid)
                 if settings.PUBLISH_CHILD_LINKS:
                     label = "Requirements:" if str(item).startswith('TEST') else "Parent links:"
                 else:
@@ -535,7 +535,7 @@ def _lines_markdown(obj, **kwargs):
 
             # Child links
             if settings.PUBLISH_CHILD_LINKS:
-                items2 = item.find_child_items(skip_parent_check=True)
+                items2 = sorted(item.find_child_items(skip_parent_check=True), key=lambda x: x.uid)
                 if items2:
                     child_links = [l for l in items2 if not str(l).startswith('TEST')]
                     test_links = [l for l in items2 if str(l).startswith('TEST')]

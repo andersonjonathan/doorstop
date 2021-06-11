@@ -171,8 +171,14 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
     yield '<style type="text/css">'
     yield from _lines_css()
     yield '</style>'
+    yield '<title>'
+    yield f'{settings.TITLE} - {settings.VERSION}'
+    yield '</title>'
     yield '</head>'
     yield '<body>'
+    yield '<h1>'
+    yield f'{settings.TITLE} - {settings.VERSION}'
+    yield '</h1>'
 
     # Additional files
     if filenames:
@@ -775,7 +781,8 @@ def _lines_html(
             if 'baseurl' not in bottle.SimpleTemplate.defaults:
                 bottle.SimpleTemplate.defaults['baseurl'] = ''
             html = bottle_template(
-                template, body=body, toc=toc_html, parent=obj.parent, document=obj
+                template, body=body, toc=toc_html, parent=obj.parent, document=obj,
+                title=f'{settings.TITLE} - {settings.VERSION}'
             )
         except Exception:
             log.error("Problem parsing the template %s", template)

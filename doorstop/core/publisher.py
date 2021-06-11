@@ -526,7 +526,7 @@ def _lines_markdown(obj, **kwargs):
                 yield ""  # break before links
                 items2 = sorted(item.parent_items, key=lambda x: x.uid)
                 if settings.PUBLISH_CHILD_LINKS:
-                    label = "Requirements:" if str(item).startswith('TEST') else "Parent links:"
+                    label = "Requirements:" if (str(item).startswith('TEST') or str(item).startswith('USECASE')) else "Parent links:"
                 else:
                     label = "Links:"
                 links = _format_md_links(items2, linkify)
@@ -537,8 +537,15 @@ def _lines_markdown(obj, **kwargs):
             if settings.PUBLISH_CHILD_LINKS:
                 items2 = sorted(item.find_child_items(skip_parent_check=True), key=lambda x: x.uid)
                 if items2:
-                    child_links = [l for l in items2 if not str(l).startswith('TEST')]
+                    child_links = [l for l in items2 if not (str(l).startswith('TEST') or str(l).startswith('USECASE'))]
+                    use_case_links = [l for l in items2 if str(l).startswith('USECASE')]
                     test_links = [l for l in items2 if str(l).startswith('TEST')]
+                    if use_case_links:
+                        yield ""  # break before links
+                        label = "Use cases:"
+                        links = _format_md_links(use_case_links, linkify)
+                        label_links = _format_md_label_links(label, links, linkify)
+                        yield label_links
                     if child_links:
                         yield ""  # break before links
                         label = "Child links:"
@@ -554,11 +561,26 @@ def _lines_markdown(obj, **kwargs):
 
                 owned_links = item.find_owned_items()
                 if owned_links:
-                    child_links = sorted(owned_links, key=lambda x: x.uid)
+                    items2 = sorted(owned_links, key=lambda x: x.uid)
+                    child_links = [l for l in items2 if not (str(l).startswith('TEST') or str(l).startswith('USECASE'))]
+                    use_case_links = [l for l in items2 if str(l).startswith('USECASE')]
+                    test_links = [l for l in items2 if str(l).startswith('TEST')]
+                    if use_case_links:
+                        yield ""  # break before links
+                        label = "Owned use cases:"
+                        links = _format_md_links(use_case_links, linkify)
+                        label_links = _format_md_label_links(label, links, linkify)
+                        yield label_links
                     if child_links:
                         yield ""  # break before links
-                        label = "Owned links:"
+                        label = "Owned requirements:"
                         links = _format_md_links(child_links, linkify)
+                        label_links = _format_md_label_links(label, links, linkify)
+                        yield label_links
+                    if test_links:
+                        yield ""  # break before links
+                        label = "Owned tests:"
+                        links = _format_md_links(test_links, linkify)
                         label_links = _format_md_label_links(label, links, linkify)
                         yield label_links
 

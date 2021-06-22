@@ -145,7 +145,7 @@ class Item(BaseFileObject):  # pylint: disable=R0902
         self._data['text'] = Item.DEFAULT_TEXT
         self._data['ref'] = Item.DEFAULT_REF
         self._data['references'] = None  # type: ignore
-        self._data['owner'] = None  # type: ignore
+        self._data['stakeholder'] = None  # type: ignore
         self._data['links'] = set()  # type: ignore
         if settings.ENABLE_HEADERS:
             self._data['header'] = Item.DEFAULT_HEADER
@@ -236,7 +236,7 @@ class Item(BaseFileObject):  # pylint: disable=R0902
                 value = stripped_value
             elif key == 'links':
                 value = set(UID(part) for part in value)
-            elif key == 'owner':
+            elif key == 'stakeholder':
                 value = UID(value)
             elif key == 'header':
                 value = Text(value)
@@ -303,7 +303,7 @@ class Item(BaseFileObject):  # pylint: disable=R0902
                 value = stripped_value  # type: ignore
             elif key == 'links':
                 value = [{str(i): i.stamp.yaml} for i in sorted(value)]  # type: ignore
-            elif key == 'owner':
+            elif key == 'stakeholder':
                 if value is None:
                     continue
                 value = str(value)
@@ -526,15 +526,15 @@ class Item(BaseFileObject):  # pylint: disable=R0902
 
     @property  # type: ignore
     @auto_load
-    def owner(self):
-        """Get a item UID for this items owner."""
-        return self._data['owner']
+    def stakeholder(self):
+        """Get a item UID for this items stakeholder."""
+        return self._data['stakeholder']
 
-    @owner.setter  # type: ignore
+    @stakeholder.setter  # type: ignore
     @auto_save
-    def owner(self, value):
-        """Set item UID for this items owner."""
-        self._data['owner'] = UID(value)  # type: ignore
+    def stakeholder(self, value):
+        """Set item UID for this items stakeholder."""
+        self._data['stakeholder'] = UID(value)  # type: ignore
 
     @property
     def parent_links(self):
@@ -563,12 +563,12 @@ class Item(BaseFileObject):  # pylint: disable=R0902
         return [item for uid, item in self._get_parent_uid_and_item()]
 
     @property
-    def owner_item(self):
-        """Get owner item that this item links to."""
+    def stakeholder_item(self):
+        """Get stakeholder item that this item links to."""
         try:
-            item = self.tree.find_item(self.owner)  # type: ignore
+            item = self.tree.find_item(self.stakeholder)  # type: ignore
         except DoorstopError:
-            item = UnknownItem(self.owner)
+            item = UnknownItem(self.stakeholder)
             log.warning(item.exception)
         return item
 
@@ -732,7 +732,7 @@ class Item(BaseFileObject):  # pylint: disable=R0902
 
     child_items = property(find_child_items)
 
-    def find_owned_items(self, find_all=True):
+    def find_stakeholder_items(self, find_all=True):
         """Get a list of items that link to this item.
 
         :param find_all: find all items (not just the first) before returning
@@ -747,13 +747,13 @@ class Item(BaseFileObject):  # pylint: disable=R0902
         if not document or not tree:
             return child_items, child_documents
         # Find child objects
-        log.debug("finding item {}'s owned objects...".format(self))
+        log.debug("finding item {}'s stakeholder objects...".format(self))
         for document2 in tree:
             child_documents.append(document2)
             # Search for child items unless we only need to find one
             if not child_items or find_all:
                 for item2 in document2:
-                    if self.uid == item2.owner:
+                    if self.uid == item2.stakeholder:
                         if not item2.active:
                             item2 = UnknownItem(item2.uid)
                             log.warning(item2.exception)
@@ -766,15 +766,15 @@ class Item(BaseFileObject):  # pylint: disable=R0902
         if child_items:
             if find_all:
                 joined = ', '.join(str(i) for i in child_items)
-                msg = "owned items: {}".format(joined)
+                msg = "stakeholder items: {}".format(joined)
             else:
-                msg = "first owned item: {}".format(child_items[0])
+                msg = "first stakeholder item: {}".format(child_items[0])
             log.debug(msg)
             joined = ', '.join(str(d) for d in child_documents)
             log.debug("child documents: {}".format(joined))
         return sorted(child_items)
 
-    owned_items = property(find_owned_items)
+    stakeholder_items = property(find_stakeholder_items)
 
     def find_child_documents(self):
         """Get a list of documents that should link to this item's document.

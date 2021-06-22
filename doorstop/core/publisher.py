@@ -210,7 +210,7 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
                     n=document.name,
                     i=item.uid,
                     i_n=str(item),
-                    content=f"{item.uid} {str(item.owner_item) if item.owner else ''} {text}")
+                    content=f"{item.uid} {str(item.stakeholder_item) if item.stakeholder else ''} {text}")
         yield '];'
 
         yield 'const searchField = document.getElementById("search-field");'
@@ -355,10 +355,10 @@ def _lines_text(obj, indent=8, width=79, **_):
                 ref = _format_text_references(item)
                 yield from _chunks(ref, width, indent)
 
-            # Owner
-            if item.owner:
+            # stakeholder
+            if item.stakeholder:
                 yield ""  # break before references
-                yield from _chunks(f"Owner: {str(item.owner_item)}", width, indent)
+                yield from _chunks(f"Stakeholder: {str(item.stakeholder_item)}", width, indent)
 
             # Prio
             if 'prio' in item.data and item.data.get('prio'):
@@ -401,12 +401,12 @@ def _lines_text(obj, indent=8, width=79, **_):
                         yield ""  # break before links
                         slinks = "Tests: " + ', '.join(test_links)
                         yield from _chunks(slinks, width, indent)
-                owned_links = item.find_owned_items()
-                if owned_links:
-                    child_links = [str(l) for l in owned_links]
+                stakeholder_links = item.find_stakeholder_items()
+                if stakeholder_links:
+                    child_links = [str(l) for l in stakeholder_links]
                     if child_links:
                         yield ""  # break before links
-                        slinks = "Owned links: " + ', '.join(child_links)
+                        slinks = "Linked to stakeholder: " + ', '.join(child_links)
                         yield from _chunks(slinks, width, indent)
 
             if item.document and item.document.publish:
@@ -498,11 +498,11 @@ def _lines_markdown(obj, **kwargs):
                 yield ""  # break before reference
                 yield _format_md_references(item)
 
-            # Owner
-            if item.owner:
+            # stakeholder
+            if item.stakeholder:
                 yield ""  # break before references
-                links = _format_md_links([item.owner_item], linkify)
-                yield _format_md_label_links("Owner:", links, linkify)
+                links = _format_md_links([item.stakeholder_item], linkify)
+                yield _format_md_label_links("Stakeholder:", links, linkify)
 
             # Prio
             if 'prio' in item.data and item.data.get('prio'):
@@ -559,27 +559,27 @@ def _lines_markdown(obj, **kwargs):
                         label_links = _format_md_label_links(label, links, linkify)
                         yield label_links
 
-                owned_links = item.find_owned_items()
-                if owned_links:
-                    items2 = sorted(owned_links, key=lambda x: x.uid)
+                stakeholder_links = item.find_stakeholder_items()
+                if stakeholder_links:
+                    items2 = sorted(stakeholder_links, key=lambda x: x.uid)
                     child_links = [l for l in items2 if not (str(l).startswith('TEST') or str(l).startswith('USECASE'))]
                     use_case_links = [l for l in items2 if str(l).startswith('USECASE')]
                     test_links = [l for l in items2 if str(l).startswith('TEST')]
                     if use_case_links:
                         yield ""  # break before links
-                        label = "Owned use cases:"
+                        label = "Use cases linked to stakeholder:"
                         links = _format_md_links(use_case_links, linkify)
                         label_links = _format_md_label_links(label, links, linkify)
                         yield label_links
                     if child_links:
                         yield ""  # break before links
-                        label = "Owned requirements:"
+                        label = "Requirements linked to stakeholder:"
                         links = _format_md_links(child_links, linkify)
                         label_links = _format_md_label_links(label, links, linkify)
                         yield label_links
                     if test_links:
                         yield ""  # break before links
-                        label = "Owned tests:"
+                        label = "Tests linked to stakeholder:"
                         links = _format_md_links(test_links, linkify)
                         label_links = _format_md_label_links(label, links, linkify)
                         yield label_links

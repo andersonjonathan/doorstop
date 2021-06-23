@@ -5,6 +5,7 @@
 import os
 import tempfile
 import textwrap
+import html
 
 import bottle
 import markdown
@@ -223,7 +224,39 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
         yield 'searchField.addEventListener("input", search);'
         yield '</script>'
 
-    # Tree structure
+    if tree:
+        yield ''
+        yield '<hr>'
+        yield ''
+        yield '<h3>Traceability matrix:</h3>'
+        items = []
+        documents = tree.documents if tree else None
+        if documents:
+            for document in sorted(documents):
+                for item in document.items:
+                    if not (str(item).startswith('TEST') or str(item).startswith('USECASE') or str(item).startswith('HEAD')):
+                        use_case_links = [create_link(l) for l in item.parent_items if str(l).startswith('USECASE')]
+                        test_links = [create_link(l) for l in item.find_child_items(skip_parent_check=True) if str(l).startswith('TEST')]
+                        items.append((item, create_link(item), use_case_links, test_links))
+            yield '<table>'
+            yield '<thead>'
+            yield '<tr>'
+            yield '<th>Requirement</th>'
+            yield '<th>Use case</th>'
+            yield '<th>Tests</th>'
+            yield '</tr>'
+            yield '</thead>'
+            yield '<tbody>'
+            for item, item_link, use_case_links, test_links in sorted(items, key=lambda x: str(x[0].uid)):
+                yield '<tr>'
+                yield '<td>{}</td>'.format(item_link)
+                yield '<td>{}</td>'.format(", ".join(use_case_links))
+                yield '<td>{}</td>'.format(", ".join(test_links))
+                yield '</tr>'
+            yield '</tbody>'
+            yield '</table>'
+
+        # Tree structure
     text = tree.draw() if tree else None
     if text:
         if filenames:
@@ -232,9 +265,19 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
         yield ''
         yield '<h3>Tree Structure:</h3>'
         yield '<pre><code>' + text + '</pre></code>'
-    yield ''
+
     yield '</body>'
     yield '</html>'
+
+
+def create_link(item):
+    """Create a link."""
+    return '<a title="{t}" href="{p}.html#{i}">{i_n}</a>'.format(
+        p=item.document.prefix,
+        i=item.uid,
+        t=html.escape(item.text),
+        i_n=str(item)
+    )
 
 
 def _lines_css():

@@ -248,10 +248,10 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
             all_tests = set()
             linked_tests = set()
             badge_mapping = {
-                'passed': '<span class="label label-success" title="Passed">✓: {count}</span>',
-                'error': '<span class="label label-danger" title="Error">!: {count}</span>',
-                'failure': '<span class="label label-danger" title="Failed">✗: {count}</span>',
-                'skipped': '<span class="label label-default" title="skipped">-: {count}</span>',
+                'passed': '<span class="label label-success" title="{count} Passed">✓  {count}</span>',
+                'error': '<span class="label label-danger" title="{count} Error">!  {count}</span>',
+                'failure': '<span class="label label-danger" title="{count} Failed">✗  {count}</span>',
+                'skipped': '<span class="label label-default" title="{count} skipped">-  {count}</span>',
             }
             for document in sorted(documents):
                 for item in document.items:

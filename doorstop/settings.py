@@ -62,5 +62,6 @@ CACHE_PATHS = True  # cache file/directory paths and contents
 SERVER_HOST = None  # '' = server not specified, None = no server in use
 SERVER_PORT = 7867
 JIRA_URL = 'https://jira.atlassian.com/'
+RESULT_FILE = 'result.yml'
 TITLE = 'Requirements'
 VERSION = '1.0'

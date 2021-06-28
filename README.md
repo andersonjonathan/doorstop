@@ -86,6 +86,23 @@ $ doorstop add SRD
 $ doorstop add SRD
 ```
 
+## Special item prefixes
+The following prefixes has a special meaning
+* TEST
+* USECASE
+* ROLE
+
+### Test items
+Items with the TEST prefix should map to a testcase.
+
+### USECASE item
+Items with the USECASE prefix work the same way as requirements but gets links grouped.
+
+### ROLE item
+Items with the ROLE prefix should describe stakeholders.
+Other items may have the `stakeholder` attribute to show who is the stakeholder to a requirement.
+
+
 ## Link items
 
 Create a child document to link to the parent:

@@ -530,6 +530,7 @@ def _publish(subs, shared):
     )
     sub.add_argument('--template', help="template file", default=publisher.HTMLTEMPLATE)
     sub.add_argument('--jira-url', help="Jira url without / on the end")
+    sub.add_argument('--result-file', help="YAML file containing test results.")
     sub.add_argument('--doc-title', help="Document title")
     sub.add_argument('--doc-version', help="Document version")
 

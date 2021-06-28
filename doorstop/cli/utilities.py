@@ -128,6 +128,8 @@ def configure_settings(args):
         settings.PUBLISH_HEADING_LEVELS = args.no_levels != 'all'
     if hasattr(args, 'jira_url') and args.jira_url is not None:
         settings.JIRA_URL = args.jira_url.strip()
+    if hasattr(args, 'result_file') and args.result_file is not None:
+        settings.RESULT_FILE = args.result_file.strip()
     if hasattr(args, 'doc_title') and args.doc_title is not None:
         settings.TITLE = args.doc_title.strip()
     if hasattr(args, 'doc_version') and args.doc_version is not None:

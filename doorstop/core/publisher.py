@@ -9,8 +9,10 @@ import html
 
 import bottle
 import markdown
+import yaml
 from bottle import template as bottle_template
 from plantuml_markdown import PlantUMLMarkdownExtension
+from collections import Counter
 
 from doorstop import common, settings
 from doorstop.common import DoorstopError
@@ -169,6 +171,9 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
         '<meta http-equiv="content-type" content="text/html; '
         'charset={charset}">'.format(charset=charset)
     )
+    baseurl = bottle.SimpleTemplate.defaults['baseurl'] or ''
+    yield f'<link rel="stylesheet" href="{baseurl}assets/doorstop/bootstrap.min.css" />'
+    yield f'<link rel="stylesheet" href="{baseurl}assets/doorstop/general.css" />'
     yield '<style type="text/css">'
     yield from _lines_css()
     yield '</style>'
@@ -229,30 +234,126 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
         yield '<hr>'
         yield ''
         yield '<h3>Traceability matrix:</h3>'
-        items = []
+        test_cases = {}
+        requirements = {}
+        use_cases = {
+            None: []
+        }
         documents = tree.documents if tree else None
         if documents:
+            result = {}
+            if os.path.isfile(settings.RESULT_FILE):
+                with open(settings.RESULT_FILE, 'r') as in_file:
+                    result = yaml.load(in_file, Loader=yaml.FullLoader)  # noqa: S506
+            all_tests = set()
+            linked_tests = set()
+            badge_mapping = {
+                'passed': '<span class="label label-success" title="Passed">✓: {count}</span>',
+                'error': '<span class="label label-danger" title="Error">!: {count}</span>',
+                'failure': '<span class="label label-danger" title="Failed">✗: {count}</span>',
+                'skipped': '<span class="label label-default" title="skipped">-: {count}</span>',
+            }
             for document in sorted(documents):
                 for item in document.items:
-                    if not (str(item).startswith('TEST') or str(item).startswith('USECASE') or str(item).startswith('HEAD')):
-                        use_case_links = [create_link(l) for l in item.parent_items if str(l).startswith('USECASE')]
-                        test_links = [create_link(l) for l in item.find_child_items(skip_parent_check=True) if str(l).startswith('TEST')]
-                        items.append((item, create_link(item), use_case_links, test_links))
-            yield '<table>'
+                    if str(item).startswith('TEST'):
+                        all_tests.add(item)
+                    if str(item).startswith('USECASE') and item not in use_cases:
+                        use_cases[item] = []
+                    if not (
+                        str(item).startswith('TEST') or
+                        str(item).startswith('ROLE') or
+                        str(item).startswith('USECASE') or
+                        str(item).startswith('HEAD')
+                    ):
+                        no_use_case = True
+                        for use_case in item.parent_items:
+                            if str(use_case).startswith('USECASE'):
+                                no_use_case = False
+                                if use_case in use_cases:
+                                    use_cases[use_case].append(item)
+                                else:
+                                    use_cases[use_case] = [item]
+                        if no_use_case:
+                            use_cases[None].append(item)
+                        test_links = []
+                        for l in item.find_child_items(skip_parent_check=True):
+                            if str(l).startswith('TEST'):
+                                linked_tests.add(l)
+                                if str(l.uid) in result:
+                                    d = result[str(l.uid)]
+                                    test_cases[l] = [
+                                        badge_mapping[x[0]].format(count=x[1])
+                                        for x in sorted(
+                                            Counter([x['status'] for x in d]).items(),
+                                            key=lambda x: x[0]
+                                        )
+                                    ]
+                                else:
+                                    test_cases[l] = []
+                                test_links.append(l)
+                        requirements[item] = test_links
+            test_links = []
+            for l in all_tests.difference(linked_tests):
+                linked_tests.add(l)
+                if str(l.uid) in result:
+                    d = result[str(l.uid)]
+                    test_cases[l] = [
+                        badge_mapping[x[0]].format(count=x[1])
+                        for x in sorted(
+                            Counter([x['status'] for x in d]).items(),
+                            key=lambda x: x[0]
+                        )
+                    ]
+                else:
+                    test_cases[l] = []
+                test_links.append(l)
+            requirements[None] = test_links
+            use_cases[None].append(None)
+
+            rows = []
+            for use_case, use_case_requirements in sorted(use_cases.items(), key=lambda x: (x[0] is None, str(x[0].uid) if x[0] else '')):
+                for requirement in sorted(use_case_requirements, key=lambda x: (x is None, str(x.uid) if x else '')):
+                    for test_case in sorted(requirements[requirement], key=lambda x: (x is None, str(x.uid) if x else '')):
+                        rows.append((use_case, requirement, test_case, test_cases[test_case]))
+                    if len(requirements[requirement]) == 0:
+                        rows.append((use_case, requirement, None, None))
+                if len(use_case_requirements) == 0:
+                    rows.append((use_case, None, None, None))
+
+            # yield '<table class="table table-condensed table-bordered table-striped">'
+            yield '<table class="table table-condensed">'
             yield '<thead>'
             yield '<tr>'
-            yield '<th>Requirement</th>'
             yield '<th>Use case</th>'
-            yield '<th>Tests</th>'
+            yield '<th>Requirement</th>'
+            yield '<th>Test case</th>'
+            yield '<th>Test result</th>'
             yield '</tr>'
             yield '</thead>'
             yield '<tbody>'
-            for item, item_link, use_case_links, test_links in sorted(items, key=lambda x: str(x[0].uid)):
+            prev_use_case = ""
+            prev_requirement = None
+            for idx, (use_case, requirement, test_case, result) in enumerate(rows):
                 yield '<tr>'
-                yield '<td>{}</td>'.format(item_link)
-                yield '<td>{}</td>'.format(", ".join(use_case_links))
-                yield '<td>{}</td>'.format(", ".join(test_links))
+                if use_case != prev_use_case:
+                    i = 0
+                    for uc, _, _, _ in rows[idx:]:
+                        if uc != use_case:
+                            break
+                        i += 1
+                    yield f'<td rowspan="{i}">{create_link(use_case) if use_case else "No use case"}</td>'
+                if requirement != prev_requirement or use_case != prev_use_case:
+                    i = 0
+                    for uc, r, _, _ in rows[idx:]:
+                        if r != requirement or uc != use_case:
+                            break
+                        i += 1
+                    yield f'<td rowspan="{i}">{create_link(requirement) if requirement else "No requirement"}</td>'
+                yield f'<td>{create_link(test_case) if test_case else "No test case"}</td>'
+                yield f'<td>{" ".join(result) if result else ""}</td>'
                 yield '</tr>'
+                prev_use_case = use_case
+                prev_requirement = requirement
             yield '</tbody>'
             yield '</table>'
 

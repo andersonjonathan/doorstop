@@ -27,6 +27,59 @@ Additional references:
 - sample: [Generated HTML](http://doorstop-dev.github.io/doorstop/)
 
 
+# Changes in this forked version of Doorstop
+
+## Documents
+Documents can have a `name` and a `level` that is used for order and display in the TOC.
+
+## Items
+
+* Items can have a `stakeholder` that links to another item, see `ROLE` below for context.
+* Items can have a `prio` that is visible in the published report.
+* Items can have a `implemented` state that is `true` or `false` and is visible as a checkmark or cross in the published report.
+* Items can have links to JIRA by using the `jira` keyword as a list.
+* The logic in fetching child items has changed to be able to have links to any item.
+* The following prefixes has a special meaning
+  * TEST - Used to define a test case, listed as tests in the published report.
+  * USECASE - Used to define a use case, listed as use cases in the published report.
+  * ROLE - Used to define a stakeholder, listed as stakeholders in the published report.
+
+## CLI
+
+* Added `--jira-url` to enable links to JIRA issues.
+* Added `--result-file` to include test results in the traceability matrix
+    The result file should be a YAML file with the test item as the key and look something like this:
+  ```yaml
+  TEST-0001:
+  - function: test_get_all_news
+    result_file: /results.xml
+    status: passed
+  - function: test_get_all_news
+    result_file: /results_v2.xml
+    status: failure
+  TEST-0002:
+  - function: test_create_news
+    result_file: /results.xml
+    status: error
+  TEST-0003:
+  - function: test_get_latest_news_for_user
+    result_file: /results.xml
+    status: skipped
+  ```
+* Added `--doc-title` and `--doc-version`, these strings are included in the published report.
+
+## Published report
+* Added bootstrap css on index page.
+* Added title and version to index page.
+* Removed old `Item traceability` matrix due to issues with the child logic and lack of understanding for the intended purpose.
+* Added search to index page to easier find requirements.
+* Added a traceability matrix that starts from a use case shows the associated requirements and the testcases for those requirements. If provided, the test results are also shown.
+
+## Limitations:
+Only the following links are supported in the traceability matrix.
+* Use case -> Requirement
+* Requirement -> Test
+
 # Setup
 
 ## Requirements

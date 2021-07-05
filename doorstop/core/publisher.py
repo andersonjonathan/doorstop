@@ -948,7 +948,7 @@ def _lines_html(
                 bottle.SimpleTemplate.defaults['baseurl'] = ''
             html = bottle_template(
                 template, body=body, toc=toc_html, parent=obj.parent, document=obj,
-                title=f'{settings.TITLE} - {settings.VERSION}'
+                title=f'{obj.name} - {settings.TITLE} - {settings.VERSION}'
             )
         except Exception:
             log.error("Problem parsing the template %s", template)

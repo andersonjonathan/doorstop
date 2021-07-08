@@ -257,17 +257,18 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
                 for item in document.items:
                     if str(item).startswith('TEST'):
                         all_tests.add(item)
-                    if str(item).startswith('USECASE') and item not in use_cases:
+                    if (str(item).startswith('USECASE') or str(item).startswith('RISK')) and item not in use_cases:
                         use_cases[item] = []
                     if not (
                         str(item).startswith('TEST') or
                         str(item).startswith('ROLE') or
                         str(item).startswith('USECASE') or
+                        str(item).startswith('RISK') or
                         str(item).startswith('HEAD')
                     ):
                         no_use_case = True
                         for use_case in item.parent_items:
-                            if str(use_case).startswith('USECASE'):
+                            if str(use_case).startswith('USECASE') or str(use_case).startswith('RISK'):
                                 no_use_case = False
                                 if use_case in use_cases:
                                     use_cases[use_case].append(item)
@@ -324,9 +325,9 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
             yield '<table class="table table-condensed">'
             yield '<thead>'
             yield '<tr>'
-            yield '<th>Use case</th>'
-            yield '<th>Requirement</th>'
-            yield '<th>Test case</th>'
+            yield '<th>Use case / Risk</th>'
+            yield '<th>Requirements</th>'
+            yield '<th>Test cases</th>'
             yield '<th>Test result</th>'
             yield '</tr>'
             yield '</thead>'
@@ -627,6 +628,38 @@ def _lines_markdown(obj, **kwargs):
             attr_list = _format_md_attr_list(item, True)
             yield standard + attr_list
 
+
+            if 'risk-rating' in item.data and item.data.get('risk-rating'):
+                risk_rating = item.data.get('risk-rating', {})
+                detectability = risk_rating.get('detectability', None)
+                probability = risk_rating.get('probability', None)
+                severity = risk_rating.get('severity', None)
+                rpn = '-'
+                if detectability is not None and probability is not None and severity is not None:
+                    rpn = int(detectability) * int(probability) * int(severity)
+                detectability = detectability if detectability is not None else '-'
+                probability = probability if probability is not None else '-'
+                severity = severity if severity is not None else '-'
+                yield ""  # break before references
+                yield "&nbsp; | Detectability | Probability | Severity | Risk Priority Number"
+                yield "------ | ------------- | ----------- | -------- | --------------------"
+                yield f"__Before mitigation__ | {detectability} | {probability} | {probability} | __{rpn}__"
+
+                if 'residual-risk-rating' in item.data and item.data.get('residual-risk-rating'):
+                    risk_rating = item.data.get('residual-risk-rating', {})
+                    detectability = risk_rating.get('detectability', None)
+                    probability = risk_rating.get('probability', None)
+                    severity = risk_rating.get('severity', None)
+                    rpn = '-'
+                    if detectability is not None and probability is not None and severity is not None:
+                        rpn = int(detectability) * int(probability) * int(severity)
+                    detectability = detectability if detectability is not None else '-'
+                    probability = probability if probability is not None else '-'
+                    severity = severity if severity is not None else '-'
+                    yield f"__After mitigation__ | {detectability} | {probability} | {probability} | __{rpn}__"
+                    yield ""  # break before references
+
+
             # Text
             if item.text:
                 yield ""  # break before text
@@ -653,6 +686,7 @@ def _lines_markdown(obj, **kwargs):
                 yield ""  # break before references
                 yield f"Priority: {str(item.data.get('prio')).strip()}"
 
+
             # Jira links
             if 'jira' in item.data and item.data.get('jira'):
                 yield ""  # break before links
@@ -669,31 +703,59 @@ def _lines_markdown(obj, **kwargs):
             if item.links:
                 yield ""  # break before links
                 items2 = sorted(item.parent_items, key=lambda x: x.uid)
-                if settings.PUBLISH_CHILD_LINKS:
-                    label = "Requirements:" if (str(item).startswith('TEST') or str(item).startswith('USECASE')) else "Parent links:"
-                else:
-                    label = "Links:"
-                links = _format_md_links(items2, linkify)
-                label_links = _format_md_label_links(label, links, linkify)
-                yield label_links
+                parent_links = [l for l in items2 if not (
+                    str(l).startswith('TEST') or str(l).startswith('USECASE') or str(l).startswith('RISK'))]
+                use_case_links = [l for l in items2 if str(l).startswith('USECASE')]
+                test_links = [l for l in items2 if str(l).startswith('TEST')]
+                risk_links = [l for l in items2 if str(l).startswith('RISK')]
+                if use_case_links:
+                    yield ""  # break before links
+                    label = "Use cases:"
+                    links = _format_md_links(use_case_links, linkify)
+                    label_links = _format_md_label_links(label, links, linkify)
+                    yield label_links
+                if parent_links:
+                    yield ""  # break before links
+                    label = "Parent links:"
+                    links = _format_md_links(parent_links, linkify)
+                    label_links = _format_md_label_links(label, links, linkify)
+                    yield label_links
+                if test_links:
+                    yield ""  # break before links
+                    label = "Tests:"
+                    links = _format_md_links(test_links, linkify)
+                    label_links = _format_md_label_links(label, links, linkify)
+                    yield label_links
+                if risk_links:
+                    yield ""  # break before links
+                    label = "Risks:"
+                    links = _format_md_links(risk_links, linkify)
+                    label_links = _format_md_label_links(label, links, linkify)
+                    yield label_links
 
             # Child links
             if settings.PUBLISH_CHILD_LINKS:
                 items2 = sorted(item.find_child_items(skip_parent_check=True), key=lambda x: x.uid)
                 if items2:
-                    child_links = [l for l in items2 if not (str(l).startswith('TEST') or str(l).startswith('USECASE'))]
+                    parent_links = [l for l in items2 if not (
+                        str(l).startswith('TEST') or str(l).startswith('USECASE') or str(l).startswith('RISK'))]
                     use_case_links = [l for l in items2 if str(l).startswith('USECASE')]
                     test_links = [l for l in items2 if str(l).startswith('TEST')]
+                    risk_links = [l for l in items2 if str(l).startswith('RISK')]
                     if use_case_links:
                         yield ""  # break before links
                         label = "Use cases:"
                         links = _format_md_links(use_case_links, linkify)
                         label_links = _format_md_label_links(label, links, linkify)
                         yield label_links
-                    if child_links:
+                    if parent_links:
                         yield ""  # break before links
                         label = "Child links:"
-                        links = _format_md_links(child_links, linkify)
+                        if str(item).startswith('USECASE'):
+                            label = "Requirements:"
+                        if str(item).startswith('RISK'):
+                            label = "Requirements for mitigating the risk:"
+                        links = _format_md_links(parent_links, linkify)
                         label_links = _format_md_label_links(label, links, linkify)
                         yield label_links
                     if test_links:
@@ -702,29 +764,42 @@ def _lines_markdown(obj, **kwargs):
                         links = _format_md_links(test_links, linkify)
                         label_links = _format_md_label_links(label, links, linkify)
                         yield label_links
+                    if risk_links:
+                        yield ""  # break before links
+                        label = "Risks:"
+                        links = _format_md_links(risk_links, linkify)
+                        label_links = _format_md_label_links(label, links, linkify)
+                        yield label_links
 
                 stakeholder_links = item.find_stakeholder_items()
                 if stakeholder_links:
                     items2 = sorted(stakeholder_links, key=lambda x: x.uid)
-                    child_links = [l for l in items2 if not (str(l).startswith('TEST') or str(l).startswith('USECASE'))]
+                    parent_links = [l for l in items2 if not (str(l).startswith('TEST') or str(l).startswith('USECASE') or str(l).startswith('RISK'))]
                     use_case_links = [l for l in items2 if str(l).startswith('USECASE')]
                     test_links = [l for l in items2 if str(l).startswith('TEST')]
+                    risk_links = [l for l in items2 if str(l).startswith('RISK')]
                     if use_case_links:
                         yield ""  # break before links
                         label = "Use cases linked to stakeholder:"
                         links = _format_md_links(use_case_links, linkify)
                         label_links = _format_md_label_links(label, links, linkify)
                         yield label_links
-                    if child_links:
+                    if parent_links:
                         yield ""  # break before links
                         label = "Requirements linked to stakeholder:"
-                        links = _format_md_links(child_links, linkify)
+                        links = _format_md_links(parent_links, linkify)
                         label_links = _format_md_label_links(label, links, linkify)
                         yield label_links
                     if test_links:
                         yield ""  # break before links
                         label = "Tests linked to stakeholder:"
                         links = _format_md_links(test_links, linkify)
+                        label_links = _format_md_label_links(label, links, linkify)
+                        yield label_links
+                    if risk_links:
+                        yield ""  # break before links
+                        label = "Risks linked to stakeholder:"
+                        links = _format_md_links(risk_links, linkify)
                         label_links = _format_md_label_links(label, links, linkify)
                         yield label_links
 
@@ -846,10 +921,10 @@ def _format_md_item_link(item, linkify=True):
     """Format an item link in Markdown."""
     if linkify and is_item(item):
         if item.header:
-            return "[{h}]({p}.html#{u})".format(
-                u=item.uid, h=item.header, p=item.document.prefix
+            return "[{h}]({p}.html#{u} \"{t}\")".format(
+                u=item.uid, h=item.header, p=item.document.prefix, t=html.escape(item.text).replace('"', '').replace('\n', '  ')
             )
-        return "[{u}]({p}.html#{u})".format(u=item.uid, p=item.document.prefix)
+        return "[{u}]({p}.html#{u} \"{t}\")".format(u=item.uid, p=item.document.prefix, t=html.escape(item.text)).replace('\n', '  ')
     else:
         return str(item.uid)  # if not `Item`, assume this is an `UnknownItem`
 
@@ -858,12 +933,12 @@ def _format_html_item_link(item, linkify=True):
     """Format an item link in HTML."""
     if linkify and is_item(item):
         if item.header:
-            link = '<a href="{p}.html#{u}">{u} {h}</a>'.format(
-                u=item.uid, h=item.header, p=item.document.prefix
+            link = '<a href="{p}.html#{u}" title="{t}">{u} {h}</a>'.format(
+                u=item.uid, h=item.header, p=item.document.prefix, t=html.escape(item.text)
             )
         else:
-            link = '<a href="{p}.html#{u}">{u}</a>'.format(
-                u=item.uid, p=item.document.prefix
+            link = '<a href="{p}.html#{u}" title="{t}">{u}</a>'.format(
+                u=item.uid, p=item.document.prefix, t=html.escape(item.text)
             )
         return link
     else:

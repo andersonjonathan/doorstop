@@ -73,7 +73,7 @@ def publish(
     ext = ext or os.path.splitext(path)[-1] or '.html'
     check(ext)
     if linkify is None:
-        linkify = is_tree(obj) and ext in ['.html', '.md']
+        linkify = is_tree(obj) and ext in ['.html', '.md', '.pdf']
     if index is None:
         index = is_tree(obj) and ext == '.html'
     if matrix is None:
@@ -100,19 +100,72 @@ def publish(
         log.info("Copying %s to %s", template_assets, assets_dir)
         common.copy_dir_contents(template_assets, assets_dir)
 
-    # Publish documents
     count = 0
-    for obj2, path2 in iter_documents(obj, path, ext):
-        count += 1
+    # Publish documents
+    if ext == '.pdf':
+        linkify = False
+        all_lines = []
+        toc = '### Table of Contents\n\n'
 
-        # Publish content to the specified path
-        log.info("publishing to {}...".format(path2))
-        lines = publish_lines(
-            obj2, ext, linkify=linkify, template=template, toc=toc, **kwargs
-        )
-        common.write_lines(lines, path2)
-        if obj2.copy_assets(assets_dir):
-            log.info('Copied assets from %s to %s', obj.assets, assets_dir)
+        for document in sorted(obj.documents):
+            if document.prefix == 'TEST':
+                continue
+            count += 1
+            for item in iter_items(document):
+                if item.depth == 1:
+                    prefix = ' * '
+                else:
+                    continue
+
+                if item.heading:
+                    lines = item.text.splitlines()
+                    heading = lines[0] if lines else ''
+                elif item.header:
+                    heading = "{h}".format(h=item.header)
+                else:
+                    heading = item.uid
+
+                if settings.PUBLISH_HEADING_LEVELS:
+                    level = _format_level(item.level)
+                    level = f"{count}{level[1:]}"
+                    lbl = '{lev} {h}'.format(lev=level, h=heading)
+                else:
+                    lbl = heading
+
+                line = '{p}{lbl}\n'.format(p=prefix, lbl=lbl)
+                toc += line
+
+            lines = publish_lines(
+                document, ext, linkify=linkify, template=template, toc=toc, count=count, **kwargs
+            )
+
+            all_lines += lines
+            all_lines += ['<div style="clear: both; page-break-after: always;"> </div>']
+            if document.copy_assets(assets_dir):
+                log.info('Copied assets from %s to %s', obj.assets, assets_dir)
+
+        all_lines = [toc, '<div style="clear: both; page-break-after: always;"> </div>'] + all_lines
+        path2 = os.path.join(path, 'index.md')
+        common.write_lines(all_lines, path2)
+        from md2pdf.core import md2pdf
+        path2 = os.path.join(path, 'index.pdf')
+        md2pdf(path2,
+               md_content='\n'.join(all_lines),
+               md_file_path=None,
+               css_file_path=None,
+               base_url=path)
+    else:
+        for obj2, path2 in iter_documents(obj, path, ext):
+            count += 1
+
+            # Publish content to the specified path
+            log.info("publishing to {}...".format(path2))
+            lines = publish_lines(
+                obj2, ext, linkify=linkify, template=template, toc=toc, **kwargs
+            )
+            common.write_lines(lines, path2)
+            if obj2.copy_assets(assets_dir):
+                log.info('Copied assets from %s to %s', obj.assets, assets_dir)
 
     # Create index
     if index and count:
@@ -210,12 +263,13 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
 
         for document in sorted(documents):
             for item in document.items:
-                text = item.text.lower().replace('\n', '\\n')
-                yield '{{link: \'<a href="{p}.html#{i}">{n} ({p}) - {i_n}</a>\', text: \'{content}\'}},'.format(
+                text = item.text.lower().replace('\n', '\\n').replace("'", "\\'")
+                yield '{{link: \'<a href="{p}.html#{i}" title="{title_content}">{n} ({p}) - {i_n}</a>\', text: \'{content}\'}},'.format(
                     p=document.prefix,
                     n=document.name,
                     i=item.uid,
                     i_n=str(item),
+                    title_content=f"{item.uid} {str(item.stakeholder_item) if item.stakeholder else ''} {text}".replace('"', '&quot;'),
                     content=f"{item.uid} {str(item.stakeholder_item) if item.stakeholder else ''} {text}")
         yield '];'
 
@@ -349,7 +403,23 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
                         if r != requirement or uc != use_case:
                             break
                         i += 1
-                    yield f'<td rowspan="{i}">{create_link(requirement) if requirement else "No requirement"}</td>'
+                    im = ''
+                    if (requirement
+                        and 'implemented' in requirement.data
+                        and requirement.data.get('implemented') not in [None, '']
+                    ):
+                        implemented = str(requirement.data.get('implemented')).strip() not in [
+                            None, False, '', 'false', 'False', "''", '""', '0']
+                        im = (
+                            '<small><span class="label {css_class}" title="{title}">{implemented}</span></small>'
+                            ).format(
+                                css_class="label-success" if implemented else 'label-danger',
+                                title="Implemented" if implemented else 'Not implemented',
+                                implemented='✓' if implemented else '✗'
+                            )
+                    yield f'<td rowspan="{i}">'
+                    yield f'{create_link(requirement) if requirement else "No requirement"}&nbsp;&nbsp;{im}'
+                    yield '</td>'
                 yield f'<td>{create_link(test_case) if test_case else "No test case"}</td>'
                 yield f'<td>{" ".join(result) if result else ""}</td>'
                 yield '</tr>'
@@ -821,6 +891,258 @@ def _lines_markdown(obj, **kwargs):
         yield ""  # break between items
 
 
+def _lines_markdown_pdf(obj, count, **kwargs):
+    """Yield lines for a Markdown report.
+
+    :param obj: Item, list of Items, or Document to publish
+    :param linkify: turn links into hyperlinks (for conversion to HTML)
+
+    :return: iterator of lines of text
+
+    """
+    linkify = kwargs.get('linkify', False)
+    for item in iter_items(obj):
+
+        heading = '#' * item.depth
+        level = _format_level(item.level)
+        level = f"{count}{level[1:]}"
+        if item.heading:
+            text_lines = item.text.splitlines()
+            # Level and Text
+            if settings.PUBLISH_HEADING_LEVELS:
+                standard = "{h} {lev} {t}".format(
+                    h=heading, lev=level, t=text_lines[0] if text_lines else ''
+                )
+            else:
+                standard = "{h} {t}".format(
+                    h=heading, t=text_lines[0] if text_lines else ''
+                )
+            attr_list = ''
+            if linkify:
+                attr_list = _format_md_attr_list(item, True)
+            yield standard + attr_list
+            yield from text_lines[1:]
+        else:
+
+            uid = item.uid
+            if settings.ENABLE_HEADERS:
+                # Implemented
+                if item.header:
+                    uid = '{h} <small>{u}</small>'.format(h=item.header, u=item.uid)
+                else:
+                    uid = '{u}'.format(u=item.uid)
+                if 'implemented' in item.data and item.data.get('implemented') not in [None, '']:
+                    implemented = str(item.data.get('implemented')).strip() not in [None, False, '', 'false', 'False', "''", '""', '0']
+                    uid = '{uid} <small><span class="label {css_class}" title="{title}">{implemented}</span></small>'.format(
+                        uid=uid,
+                        css_class="label-success" if implemented else 'label-danger',
+                        title="Implemented" if implemented else 'Not implemented',
+                        implemented='✓' if implemented else '✗'
+                    )
+
+            # Level and UID
+            if settings.PUBLISH_BODY_LEVELS:
+                standard = "{h} {lev} {u}".format(h=heading, lev=level, u=uid)
+            else:
+                standard = "{h} {u}".format(h=heading, u=uid)
+            attr_list = ''
+            if linkify:
+                attr_list = _format_md_attr_list(item, True)
+            yield standard + attr_list
+
+
+            if 'risk-rating' in item.data and item.data.get('risk-rating'):
+                risk_rating = item.data.get('risk-rating', {})
+                detectability = risk_rating.get('detectability', None)
+                probability = risk_rating.get('probability', None)
+                severity = risk_rating.get('severity', None)
+                rpn = '-'
+                if detectability is not None and probability is not None and severity is not None:
+                    rpn = int(detectability) * int(probability) * int(severity)
+                detectability = detectability if detectability is not None else '-'
+                probability = probability if probability is not None else '-'
+                severity = severity if severity is not None else '-'
+                yield ""  # break before references
+                yield "&nbsp; | Detectability | Probability | Severity | Risk Priority Number"
+                yield "------ | ------------- | ----------- | -------- | --------------------"
+                yield f"__Before mitigation__ | {detectability} | {probability} | {probability} | __{rpn}__"
+
+                if 'residual-risk-rating' in item.data and item.data.get('residual-risk-rating'):
+                    risk_rating = item.data.get('residual-risk-rating', {})
+                    detectability = risk_rating.get('detectability', None)
+                    probability = risk_rating.get('probability', None)
+                    severity = risk_rating.get('severity', None)
+                    rpn = '-'
+                    if detectability is not None and probability is not None and severity is not None:
+                        rpn = int(detectability) * int(probability) * int(severity)
+                    detectability = detectability if detectability is not None else '-'
+                    probability = probability if probability is not None else '-'
+                    severity = severity if severity is not None else '-'
+                    yield f"__After mitigation__ | {detectability} | {probability} | {probability} | __{rpn}__"
+                    yield ""  # break before references
+
+
+            # Text
+            if item.text:
+                yield ""  # break before text
+                yield from item.text.splitlines()
+
+            # Reference
+            if item.ref:
+                yield ""  # break before reference
+                yield _format_md_ref(item)
+
+            # Reference
+            if item.references:
+                yield ""  # break before reference
+                yield _format_md_references(item)
+
+            # stakeholder
+            if item.stakeholder:
+                yield ""  # break before references
+                links = _format_md_links([item.stakeholder_item], linkify)
+                yield _format_md_label_links("Stakeholder:", links, linkify)
+
+            # Prio
+            if 'prio' in item.data and item.data.get('prio'):
+                yield ""  # break before references
+                yield f"Priority: {str(item.data.get('prio')).strip()}"
+
+
+            # Jira links
+            if 'jira' in item.data and item.data.get('jira'):
+                yield ""  # break before links
+                jira_items = item.data.get('jira')
+                label = "Jira issues:"
+                links = ', '.join(["[{jira_issue}]({base_url}/browse/{jira_issue})".format(
+                    jira_issue=jira_item,
+                    base_url=settings.JIRA_URL
+                ) for jira_item in jira_items])
+                label_links = _format_md_label_links(label, links, linkify)
+                yield label_links
+
+            # Parent links
+            if item.links:
+                yield ""  # break before links
+                items2 = sorted(item.parent_items, key=lambda x: x.uid)
+                parent_links = [l for l in items2 if not (
+                    str(l).startswith('TEST') or str(l).startswith('USECASE') or str(l).startswith('RISK'))]
+                use_case_links = [l for l in items2 if str(l).startswith('USECASE')]
+                test_links = [l for l in items2 if str(l).startswith('TEST')]
+                risk_links = [l for l in items2 if str(l).startswith('RISK')]
+                if use_case_links:
+                    yield ""  # break before links
+                    label = "Use cases:"
+                    links = _format_md_links(use_case_links, linkify)
+                    label_links = _format_md_label_links(label, links, linkify)
+                    yield label_links
+                if parent_links:
+                    yield ""  # break before links
+                    label = "Parent links:"
+                    links = _format_md_links(parent_links, linkify)
+                    label_links = _format_md_label_links(label, links, linkify)
+                    yield label_links
+                if test_links:
+                    yield ""  # break before links
+                    label = "Tests:"
+                    links = _format_md_links(test_links, linkify)
+                    label_links = _format_md_label_links(label, links, linkify)
+                    yield label_links
+                if risk_links:
+                    yield ""  # break before links
+                    label = "Risks:"
+                    links = _format_md_links(risk_links, linkify)
+                    label_links = _format_md_label_links(label, links, linkify)
+                    yield label_links
+
+            # Child links
+            if settings.PUBLISH_CHILD_LINKS:
+                items2 = sorted(item.find_child_items(skip_parent_check=True), key=lambda x: x.uid)
+                if items2:
+                    parent_links = [l for l in items2 if not (
+                        str(l).startswith('TEST') or str(l).startswith('USECASE') or str(l).startswith('RISK'))]
+                    use_case_links = [l for l in items2 if str(l).startswith('USECASE')]
+                    test_links = [l for l in items2 if str(l).startswith('TEST')]
+                    risk_links = [l for l in items2 if str(l).startswith('RISK')]
+                    if use_case_links:
+                        yield ""  # break before links
+                        label = "Use cases:"
+                        links = _format_md_links(use_case_links, linkify)
+                        label_links = _format_md_label_links(label, links, linkify)
+                        yield label_links
+                    if parent_links:
+                        yield ""  # break before links
+                        label = "Child links:"
+                        if str(item).startswith('USECASE'):
+                            label = "Requirements:"
+                        if str(item).startswith('RISK'):
+                            label = "Requirements for mitigating the risk:"
+                        links = _format_md_links(parent_links, linkify)
+                        label_links = _format_md_label_links(label, links, linkify)
+                        yield label_links
+                    if test_links:
+                        yield ""  # break before links
+                        label = "Tests:"
+                        links = _format_md_links(test_links, linkify)
+                        label_links = _format_md_label_links(label, links, linkify)
+                        yield label_links
+                    if risk_links:
+                        yield ""  # break before links
+                        label = "Risks:"
+                        links = _format_md_links(risk_links, linkify)
+                        label_links = _format_md_label_links(label, links, linkify)
+                        yield label_links
+
+                stakeholder_links = item.find_stakeholder_items()
+                if stakeholder_links:
+                    items2 = sorted(stakeholder_links, key=lambda x: x.uid)
+                    parent_links = [l for l in items2 if not (str(l).startswith('TEST') or str(l).startswith('USECASE') or str(l).startswith('RISK'))]
+                    use_case_links = [l for l in items2 if str(l).startswith('USECASE')]
+                    test_links = [l for l in items2 if str(l).startswith('TEST')]
+                    risk_links = [l for l in items2 if str(l).startswith('RISK')]
+                    if use_case_links:
+                        yield ""  # break before links
+                        label = "Use cases linked to stakeholder:"
+                        links = _format_md_links(use_case_links, linkify)
+                        label_links = _format_md_label_links(label, links, linkify)
+                        yield label_links
+                    if parent_links:
+                        yield ""  # break before links
+                        label = "Requirements linked to stakeholder:"
+                        links = _format_md_links(parent_links, linkify)
+                        label_links = _format_md_label_links(label, links, linkify)
+                        yield label_links
+                    if test_links:
+                        yield ""  # break before links
+                        label = "Tests linked to stakeholder:"
+                        links = _format_md_links(test_links, linkify)
+                        label_links = _format_md_label_links(label, links, linkify)
+                        yield label_links
+                    if risk_links:
+                        yield ""  # break before links
+                        label = "Risks linked to stakeholder:"
+                        links = _format_md_links(risk_links, linkify)
+                        label_links = _format_md_label_links(label, links, linkify)
+                        yield label_links
+
+
+            # Add custom publish attributes
+            if item.document and item.document.publish:
+                header_printed = False
+                for attr in item.document.publish:
+                    if not item.attribute(attr):
+                        continue
+                    if not header_printed:
+                        header_printed = True
+                        yield ""
+                        yield "| Attribute | Value |"
+                        yield "| --------- | ----- |"
+                    yield "| {} | {} |".format(attr, item.attribute(attr))
+                yield ""
+
+        yield ""  # break between items
+
+
 def _format_level(level):
     """Convert a level to a string and keep zeros if not a top level."""
     text = str(level)
@@ -1034,7 +1356,7 @@ def _lines_html(
 
 
 # Mapping from file extension to lines generator
-FORMAT_LINES = {'.txt': _lines_text, '.md': _lines_markdown, '.html': _lines_html}
+FORMAT_LINES = {'.txt': _lines_text, '.md': _lines_markdown, '.html': _lines_html, '.pdf': _lines_markdown_pdf}
 
 
 def check(ext):

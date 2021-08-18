@@ -1,14 +1,14 @@
 % rebase('base.tpl', title=title or 'Doorstop', stylesheet='sidebar.css')
 <div class="container-fluid">
     <div class="row">
-      <div class="col-lg-3 hidden-sm hidden-xs">
+      <div class="col-md-3 hidden-sm hidden-xs">
           <nav id="TOC" class="nav nav-stacked fixed sidebar">
               <a href="./">Back to start page</a><br/>
               <a href="javascript:window.history.back()">Back</a>
               {{!toc}}
           </nav>
       </div>
-      <div class="col-lg-8" id="main">
+      <div class="col-md-8" id="main">
         {{!body}}
       </div>
     </div>

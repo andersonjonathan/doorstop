@@ -190,6 +190,7 @@ def get_ext(args, error, ext_stdout, ext_file, whole_tree=False):
     for _ext, option in {
         '.txt': 'text',
         '.md': 'markdown',
+        '.pdf': 'pdf',
         '.html': 'html',
         '.yml': 'yaml',
         '.csv': 'csv',

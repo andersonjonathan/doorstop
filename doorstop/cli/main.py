@@ -506,6 +506,7 @@ def _publish(subs, shared):
         '-t', '--text', action='store_true', help="output text (default when no path)"
     )
     group.add_argument('-m', '--markdown', action='store_true', help="output Markdown")
+    group.add_argument('-p', '--pdf', action='store_true', help="output PDF")
     group.add_argument(
         '-H', '--html', action='store_true', help="output HTML (default for 'all')"
     )

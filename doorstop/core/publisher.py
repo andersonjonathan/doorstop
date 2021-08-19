@@ -3,6 +3,7 @@
 """Functions to publish documents and items."""
 
 import os
+import shutil
 import tempfile
 import textwrap
 import html
@@ -32,6 +33,8 @@ EXTENSIONS = (
     ),
 )
 CSS = os.path.join(os.path.dirname(__file__), 'files', 'doorstop.css')
+PDF_CSS = os.path.join(os.path.dirname(__file__), 'files', 'doorstop_pdf.css')
+PDF = 'index.pdf'
 HTMLTEMPLATE = 'sidebar'
 INDEX = 'index.html'
 MATRIX = 'traceability.csv'
@@ -128,6 +131,8 @@ def publish(
                 if settings.PUBLISH_HEADING_LEVELS:
                     level = _format_level(item.level)
                     level = f"{count}{level[1:]}"
+                    if level.endswith('.0'):
+                        level = level[:-2]
                     lbl = '{lev} {h}'.format(lev=level, h=heading)
                 else:
                     lbl = heading
@@ -143,16 +148,22 @@ def publish(
             all_lines += ['<div style="clear: both; page-break-after: always;"> </div>']
             if document.copy_assets(assets_dir):
                 log.info('Copied assets from %s to %s', obj.assets, assets_dir)
-
-        all_lines = [toc, '<div style="clear: both; page-break-after: always;"> </div>'] + all_lines
+        shutil.copyfile(PDF_CSS, os.path.join(assets_dir, 'doorstop_pdf.css'))
+        all_lines = [
+                        f'<H1 style="text-align: center;">{settings.TITLE}</H1>',
+                        f'<H3 style="text-align: center;">{settings.VERSION}</H3>',
+                        '<div style="clear: both; page-break-after: always;"> </div>',
+                        toc,
+                        '<div style="clear: both; page-break-after: always;"> </div>'
+                    ] + all_lines
         path2 = os.path.join(path, 'index.md')
         common.write_lines(all_lines, path2)
         from md2pdf.core import md2pdf
-        path2 = os.path.join(path, 'index.pdf')
+        path2 = os.path.join(path, PDF)
         md2pdf(path2,
                md_content='\n'.join(all_lines),
                md_file_path=None,
-               css_file_path=None,
+               css_file_path=os.path.join(assets_dir, 'doorstop_pdf.css'),
                base_url=path)
     else:
         for obj2, path2 in iter_documents(obj, path, ext):
@@ -204,13 +215,13 @@ def _index(directory, index=INDEX, extensions=('.html',), tree=None):
     if filenames:
         path = os.path.join(directory, index)
         log.info("creating an {}...".format(index))
-        lines = _lines_index(sorted(filenames), tree=tree)
+        lines = _lines_index(sorted(filenames), tree=tree, link_to_pdf=os.path.exists(os.path.join(directory, PDF)))
         common.write_lines(lines, path)
     else:
         log.warning("no files for {}".format(index))
 
 
-def _lines_index(filenames, charset='UTF-8', tree=None):
+def _lines_index(filenames, charset='UTF-8', tree=None, link_to_pdf=False):
     """Yield lines of HTML for index.html.
 
     :param filesnames: list of filenames to add to the index
@@ -253,6 +264,12 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
         yield ''
         yield '<hr>'
         yield ''
+        if link_to_pdf:
+            yield f'<br/><a href="./{PDF}">Requirements as PDF</a><br/><br/>'
+            yield ''
+            yield ''
+            yield '<hr/>'
+            yield ''
         yield '<h3>Search:</h3>'
         yield '<input type="text" name="search" id="search-field"/>'
         yield '<pre id="search-result">'
@@ -269,7 +286,8 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
                     n=document.name,
                     i=item.uid,
                     i_n=str(item),
-                    title_content=f"{item.uid} {str(item.stakeholder_item) if item.stakeholder else ''} {text}".replace('"', '&quot;'),
+                    title_content=f"{item.uid} {str(item.stakeholder_item) if item.stakeholder else ''} {text}".replace(
+                        '"', '&quot;'),
                     content=f"{item.uid} {str(item.stakeholder_item) if item.stakeholder else ''} {text}")
         yield '];'
 
@@ -366,9 +384,11 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
             use_cases[None].append(None)
 
             rows = []
-            for use_case, use_case_requirements in sorted(use_cases.items(), key=lambda x: (x[0] is None, str(x[0].uid) if x[0] else '')):
+            for use_case, use_case_requirements in sorted(use_cases.items(),
+                                                          key=lambda x: (x[0] is None, str(x[0].uid) if x[0] else '')):
                 for requirement in sorted(use_case_requirements, key=lambda x: (x is None, str(x.uid) if x else '')):
-                    for test_case in sorted(requirements[requirement], key=lambda x: (x is None, str(x.uid) if x else '')):
+                    for test_case in sorted(requirements[requirement],
+                                            key=lambda x: (x is None, str(x.uid) if x else '')):
                         rows.append((use_case, requirement, test_case, test_cases[test_case]))
                     if len(requirements[requirement]) == 0:
                         rows.append((use_case, requirement, None, None))
@@ -412,11 +432,11 @@ def _lines_index(filenames, charset='UTF-8', tree=None):
                             None, False, '', 'false', 'False', "''", '""', '0']
                         im = (
                             '<small><span class="label {css_class}" title="{title}">{implemented}</span></small>'
-                            ).format(
-                                css_class="label-success" if implemented else 'label-danger',
-                                title="Implemented" if implemented else 'Not implemented',
-                                implemented='✓' if implemented else '✗'
-                            )
+                        ).format(
+                            css_class="label-success" if implemented else 'label-danger',
+                            title="Implemented" if implemented else 'Not implemented',
+                            implemented='✓' if implemented else '✗'
+                        )
                     yield f'<td rowspan="{i}">'
                     yield f'{create_link(requirement) if requirement else "No requirement"}&nbsp;&nbsp;{im}'
                     yield '</td>'
@@ -677,11 +697,15 @@ def _lines_markdown(obj, **kwargs):
             if settings.ENABLE_HEADERS:
                 # Implemented
                 if item.header:
-                    uid = '{h} <small>{u}</small>'.format(h=item.header, u=item.uid)
+                    if str(item.uid).startswith('HEAD'):
+                        uid = '{h}'.format(h=item.header)
+                    else:
+                        uid = '{h} <small>{u}</small>'.format(h=item.header, u=item.uid)
                 else:
                     uid = '{u}'.format(u=item.uid)
                 if 'implemented' in item.data and item.data.get('implemented') not in [None, '']:
-                    implemented = str(item.data.get('implemented')).strip() not in [None, False, '', 'false', 'False', "''", '""', '0']
+                    implemented = str(item.data.get('implemented')).strip() not in [None, False, '', 'false', 'False',
+                                                                                    "''", '""', '0']
                     uid = '{uid} <small><span class="label {css_class}" title="{title}">{implemented}</span></small>'.format(
                         uid=uid,
                         css_class="label-success" if implemented else 'label-danger',
@@ -697,7 +721,6 @@ def _lines_markdown(obj, **kwargs):
 
             attr_list = _format_md_attr_list(item, True)
             yield standard + attr_list
-
 
             if 'risk-rating' in item.data and item.data.get('risk-rating'):
                 risk_rating = item.data.get('risk-rating', {})
@@ -729,7 +752,6 @@ def _lines_markdown(obj, **kwargs):
                     yield f"__After mitigation__ | {detectability} | {probability} | {probability} | __{rpn}__"
                     yield ""  # break before references
 
-
             # Text
             if item.text:
                 yield ""  # break before text
@@ -755,7 +777,6 @@ def _lines_markdown(obj, **kwargs):
             if 'prio' in item.data and item.data.get('prio'):
                 yield ""  # break before references
                 yield f"Priority: {str(item.data.get('prio')).strip()}"
-
 
             # Jira links
             if 'jira' in item.data and item.data.get('jira'):
@@ -844,7 +865,8 @@ def _lines_markdown(obj, **kwargs):
                 stakeholder_links = item.find_stakeholder_items()
                 if stakeholder_links:
                     items2 = sorted(stakeholder_links, key=lambda x: x.uid)
-                    parent_links = [l for l in items2 if not (str(l).startswith('TEST') or str(l).startswith('USECASE') or str(l).startswith('RISK'))]
+                    parent_links = [l for l in items2 if not (
+                            str(l).startswith('TEST') or str(l).startswith('USECASE') or str(l).startswith('RISK'))]
                     use_case_links = [l for l in items2 if str(l).startswith('USECASE')]
                     test_links = [l for l in items2 if str(l).startswith('TEST')]
                     risk_links = [l for l in items2 if str(l).startswith('RISK')]
@@ -872,7 +894,6 @@ def _lines_markdown(obj, **kwargs):
                         links = _format_md_links(risk_links, linkify)
                         label_links = _format_md_label_links(label, links, linkify)
                         yield label_links
-
 
             # Add custom publish attributes
             if item.document and item.document.publish:
@@ -906,6 +927,8 @@ def _lines_markdown_pdf(obj, count, **kwargs):
         heading = '#' * item.depth
         level = _format_level(item.level)
         level = f"{count}{level[1:]}"
+        if level.endswith('.0'):
+            level = level[:-2]
         if item.heading:
             text_lines = item.text.splitlines()
             # Level and Text
@@ -928,17 +951,24 @@ def _lines_markdown_pdf(obj, count, **kwargs):
             if settings.ENABLE_HEADERS:
                 # Implemented
                 if item.header:
-                    uid = '{h} <small>{u}</small>'.format(h=item.header, u=item.uid)
+                    if str(item.uid).startswith('HEAD'):
+                        uid = '{h}'.format(h=item.header)
+                    else:
+                        uid = '{h} <small>{u}</small>'.format(h=item.header, u=item.uid)
                 else:
                     uid = '{u}'.format(u=item.uid)
                 if 'implemented' in item.data and item.data.get('implemented') not in [None, '']:
-                    implemented = str(item.data.get('implemented')).strip() not in [None, False, '', 'false', 'False', "''", '""', '0']
+                    implemented = str(item.data.get('implemented')).strip() not in [None, False, '', 'false', 'False',
+                                                                                    "''", '""', '0']
                     uid = '{uid} <small><span class="label {css_class}" title="{title}">{implemented}</span></small>'.format(
                         uid=uid,
                         css_class="label-success" if implemented else 'label-danger',
                         title="Implemented" if implemented else 'Not implemented',
                         implemented='✓' if implemented else '✗'
                     )
+                # Prio
+                if 'prio' in item.data and item.data.get('prio'):
+                    uid = f"{uid} <small>({str(item.data.get('prio')).strip()})</small>"
 
             # Level and UID
             if settings.PUBLISH_BODY_LEVELS:
@@ -949,7 +979,6 @@ def _lines_markdown_pdf(obj, count, **kwargs):
             if linkify:
                 attr_list = _format_md_attr_list(item, True)
             yield standard + attr_list
-
 
             if 'risk-rating' in item.data and item.data.get('risk-rating'):
                 risk_rating = item.data.get('risk-rating', {})
@@ -981,7 +1010,6 @@ def _lines_markdown_pdf(obj, count, **kwargs):
                     yield f"__After mitigation__ | {detectability} | {probability} | {probability} | __{rpn}__"
                     yield ""  # break before references
 
-
             # Text
             if item.text:
                 yield ""  # break before text
@@ -1002,12 +1030,6 @@ def _lines_markdown_pdf(obj, count, **kwargs):
                 yield ""  # break before references
                 links = _format_md_links([item.stakeholder_item], linkify)
                 yield _format_md_label_links("Stakeholder:", links, linkify)
-
-            # Prio
-            if 'prio' in item.data and item.data.get('prio'):
-                yield ""  # break before references
-                yield f"Priority: {str(item.data.get('prio')).strip()}"
-
 
             # Jira links
             if 'jira' in item.data and item.data.get('jira'):
@@ -1096,7 +1118,8 @@ def _lines_markdown_pdf(obj, count, **kwargs):
                 stakeholder_links = item.find_stakeholder_items()
                 if stakeholder_links:
                     items2 = sorted(stakeholder_links, key=lambda x: x.uid)
-                    parent_links = [l for l in items2 if not (str(l).startswith('TEST') or str(l).startswith('USECASE') or str(l).startswith('RISK'))]
+                    parent_links = [l for l in items2 if not (
+                            str(l).startswith('TEST') or str(l).startswith('USECASE') or str(l).startswith('RISK'))]
                     use_case_links = [l for l in items2 if str(l).startswith('USECASE')]
                     test_links = [l for l in items2 if str(l).startswith('TEST')]
                     risk_links = [l for l in items2 if str(l).startswith('RISK')]
@@ -1124,7 +1147,6 @@ def _lines_markdown_pdf(obj, count, **kwargs):
                         links = _format_md_links(risk_links, linkify)
                         label_links = _format_md_label_links(label, links, linkify)
                         yield label_links
-
 
             # Add custom publish attributes
             if item.document and item.document.publish:
@@ -1244,9 +1266,11 @@ def _format_md_item_link(item, linkify=True):
     if linkify and is_item(item):
         if item.header:
             return "[{h}]({p}.html#{u} \"{t}\")".format(
-                u=item.uid, h=item.header, p=item.document.prefix, t=html.escape(item.text).replace('"', '').replace('\n', '  ')
+                u=item.uid, h=item.header, p=item.document.prefix,
+                t=html.escape(item.text).replace('"', '').replace('\n', '  ')
             )
-        return "[{u}]({p}.html#{u} \"{t}\")".format(u=item.uid, p=item.document.prefix, t=html.escape(item.text)).replace('\n', '  ')
+        return "[{u}]({p}.html#{u} \"{t}\")".format(u=item.uid, p=item.document.prefix,
+                                                    t=html.escape(item.text)).replace('\n', '  ')
     else:
         return str(item.uid)  # if not `Item`, assume this is an `UnknownItem`
 

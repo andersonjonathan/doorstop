@@ -2,18 +2,16 @@ body {
   margin: 0 auto;
   font-family: Georgia, Palatino, serif;
   color: #444444;
-  line-height: 1;
-  max-width: 960px;
-  padding: 30px;
 }
 
 h1, h2, h3, h4, h5, h6 {
   color: #111111;
   font-weight: 400;
+  margin-bottom: 20px;
 }
 
 h1, h2, h3, h4, h5, h6, p {
-  margin-bottom: 24px;
+  /*margin-bottom: 24px;*/
   padding: 0;
 }
 
@@ -34,19 +32,8 @@ h4, h5, h6 {
 }
 
 a {
-  color: #0099ff;
-  margin: 0;
-  padding: 0;
-  vertical-align: baseline;
-}
-
-a:hover {
+  color: #444444;
   text-decoration: none;
-  color: #ff6600;
-}
-
-a:visited {
-  color: purple;
 }
 
 ul, ol {
@@ -138,4 +125,12 @@ tr.alt td {
 
 img {
   max-width: 100%;
+}
+
+.label-danger {
+  color: #a80019;
+}
+
+.label-success {
+  color: #13aa13;
 }

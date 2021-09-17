@@ -465,9 +465,9 @@ def _lines_index(filenames, charset='UTF-8', tree=None, link_to_pdf=False):
 def create_link(item):
     """Create a link."""
     return '<a title="{t}" href="{p}.html#{i}">{i_n}</a>'.format(
-        p=item.document.prefix,
-        i=item.uid,
-        t=html.escape(item.text),
+        p=item.document.prefix if hasattr(item, 'document') and hasattr(item.document, 'prefix') else '',
+        i=item.uid if hasattr(item, 'uid') else '',
+        t=html.escape(item.text if hasattr(item, 'text') else ''),
         i_n=str(item)
     )
 
